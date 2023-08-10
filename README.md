@@ -9,7 +9,9 @@ Then open main.py in your IDE and run it.
 
 # Pictures
 ## IDE
-![alt text](https://github.com/octaprog7/...)
-![alt text](https://github.com/octaprog7/...)
+### Chip temperature sensor
+![alt text](https://github.com/octaprog7/GeomagneticSensor/blob/master/ide_temp.png)
+### Magnetic field component
+![alt text](https://github.com/octaprog7/GeomagneticSensor/blob/master/ide_mag_xyz.png)
 ## Макетная плата/Bread board
-![alt text](https://github.com/octaprog7/...)
+![alt text](https://github.com/octaprog7/GeomagneticSensor/blob/master/board.jpg)
