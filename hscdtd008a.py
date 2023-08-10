@@ -3,14 +3,14 @@
 # MIT license
 from sensor_pack import bus_service
 import geosensmod
-from sensor_pack.base_sensor import check_value     # ,Device, BaseSensor, Iterator
+from sensor_pack.base_sensor import check_value, Iterator
 import array
 import time
 
 
 # little endian byte order
 # Geomagnetic Sensor HSCDTD008A
-class HSCDTD008A(geosensmod.GeoMagneticSensor):
+class HSCDTD008A(geosensmod.GeoMagneticSensor, Iterator):
     """Высокочувствительный трех осевой датчик магнитного поля от AlpsAlpine
     A high sensitivity three axis terrestrial magnetic sensor from AlpsAlpine.
     Electronic Compass function."""
@@ -300,3 +300,11 @@ class HSCDTD008A(geosensmod.GeoMagneticSensor):
             if not val:
                 break   # калибровка завершилась!
             time.sleep_ms(10)   # ожидание
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        """возвращает результат только в периодическом режиме измерений!"""
+        if self.periodical_meas_mode:
+            self.get_axis(-1)
