@@ -35,8 +35,9 @@ if __name__ == '__main__':
 
 if __name__ == '__main__':
     dly: int = 250
+    max_cnt = 30
     sensor = hscdtd008a.HSCDTD008A(adapter)
-    sensor.setup(active_pwr_mode=True)  # включаю датчик
+    sensor.setup(active_pwr_mode=True)  # включаю датчик. single shot mode (force mode)
     print(f"Sensor id: {sensor.get_id()}")
     print(f"Offset_drift_values: {sensor.offset_drift_values}")
     print(16 * "_")
@@ -53,7 +54,7 @@ if __name__ == '__main__':
     show_state(sensor)
     print(16 * "_")
     cnt = 0
-    while cnt < 30:
+    while cnt < max_cnt:
         status = sensor.get_status()
         if status[3]:   # TRDY flag from STAT1 reg
             temp = sensor.get_temperature()
@@ -67,10 +68,10 @@ if __name__ == '__main__':
     print(16 * "_")
     show_state(sensor)
     print(16 * "_")
-    print("Magnetic field measurement!")
+    print("Magnetic field measurement! Force mode!")
     cnt = 0
     sensor.start_measure()
-    while cnt < 30:
+    while cnt < max_cnt:
         status = sensor.get_status()
         if status[0] or status[1]:  # DRDY or DOR flag from STAT1 reg
             # field = [sensor.get_axis(i) for i in range(3)]    # три(!) вызова в цикле
@@ -79,5 +80,17 @@ if __name__ == '__main__':
             print(f"magnetic field component: X:{field[0]}; Y:{field[1]}; Z:{field[2]}")
         else:
             print(f"status: {status}")
+        time.sleep_ms(dly)
+        cnt += 1
+
+    print("Magnetic field measurement! Periodical mode!")
+    sensor.use_offset = True
+    sensor.setup(single_mode=False)     # periodical mode
+    cnt = 0
+    while cnt < max_cnt:
+        status = sensor.get_status()
+        if status[0]:  # DRDY or DOR flag from STAT1 reg    # or status[1]
+            field = sensor.get_axis(-1)  # все за один(!) вызов
+            print(f"magnetic field component: X:{field[0]}; Y:{field[1]}; Z:{field[2]}")
         time.sleep_ms(dly)
         # cnt += 1
