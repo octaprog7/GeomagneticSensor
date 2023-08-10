@@ -5,6 +5,7 @@ from sensor_pack import bus_service
 import geosensmod
 from sensor_pack.base_sensor import check_value     # ,Device, BaseSensor, Iterator
 import array
+import time
 
 
 # little endian byte order
@@ -40,7 +41,7 @@ class HSCDTD008A(geosensmod.GeoMagneticSensor):
         self._use_offset = False
 
     @staticmethod
-    def copy(destination, source):
+    def _copy(destination, source):
         for i, item in enumerate(source):
             destination[i] = item
 
@@ -53,7 +54,7 @@ class HSCDTD008A(geosensmod.GeoMagneticSensor):
             source_addr = 0x20
             destination = self._mag_field_offs
         b_val = self._read_reg(reg_addr=source_addr, bytes_count=6)
-        self.copy(destination, self.unpack(fmt_char="hhh", source=b_val))
+        self._copy(destination, self.unpack(fmt_char="hhh", source=b_val))
 
     def _read_offset(self):
         """считывает из датчика и записывает в массив несколько смещений!"""
@@ -286,11 +287,16 @@ class HSCDTD008A(geosensmod.GeoMagneticSensor):
         """управляет измерением температуры в активном режиме датчика"""
         self._control_3(temp_measure=value)
 
-    def calibrate_offset(self, value: bool = True):
-        """запускает калибровку смещения в активном режиме датчика"""
-        self._control_3(calibrate_offset=value)
-
     @property
     def offset_drift_values(self) -> tuple[int, int, int]:
         """Возвращает Offset Drift Values (OFFX, OFFY, OFFZ)"""
         return self._mag_field_offs[0], self._mag_field_offs[1], self._mag_field_offs[2]
+
+    def calibrate_offsets(self):
+        """Выполняется калибровка каких-то смещений. Вызывать только в режиме измерений по запросу(!)"""
+        self._control_3(calibrate_offset=True)  # CTRL3.FRC -> 1, CTRL3.OCL -> 1
+        while True:
+            val = 0x01 & self._read_reg(0x1D)[0]   # read val CTRL3
+            if not val:
+                break   # калибровка завершилась!
+            time.sleep_ms(10)   # ожидание

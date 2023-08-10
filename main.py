@@ -38,6 +38,7 @@ if __name__ == '__main__':
     sensor = hscdtd008a.HSCDTD008A(adapter)
     sensor.setup(active_pwr_mode=True)  # включаю датчик
     print(f"Sensor id: {sensor.get_id()}")
+    print(f"Offset_drift_values: {sensor.offset_drift_values}")
     print(16 * "_")
     show_state(sensor)
     print(16 * "_")
