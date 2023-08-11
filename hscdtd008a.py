@@ -300,6 +300,8 @@ class HSCDTD008A(geosensmod.GeoMagneticSensor, Iterator):
             if not val:
                 break   # калибровка завершилась!
             time.sleep_ms(10)   # ожидание
+        # читаю смещения в self._mag_field_offs
+        self._read_field(offset=True)
 
     def __iter__(self):
         return self
