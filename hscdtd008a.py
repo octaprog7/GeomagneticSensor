@@ -309,4 +309,4 @@ class HSCDTD008A(geosensmod.GeoMagneticSensor, Iterator):
     def __next__(self):
         """возвращает результат только в периодическом режиме измерений!"""
         if self.periodical_meas_mode:
-            self.get_axis(-1)
+            return self.get_axis(-1)
