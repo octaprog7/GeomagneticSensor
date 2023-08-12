@@ -292,8 +292,23 @@ class HSCDTD008A(geosensmod.GeoMagneticSensor, Iterator):
         """Возвращает Offset Drift Values (OFFX, OFFY, OFFZ)"""
         return self._mag_field_offs[0], self._mag_field_offs[1], self._mag_field_offs[2]
 
+    def set_offset_drift_values(self, offs_x: int = 0, offs_y: int = 0, offs_z: int = 0):
+        """Запись значений смещений в регистры датчика.
+        Значение (offs_*) не должны превышать от -8192 dec до +8191 dec"""
+        t = offs_x, offs_y, offs_z
+        ba = bytearray([0 for _ in range(2*3)])
+        for index, value in enumerate(t):
+            check_value(value, range(-8192, 8192), f"Invalid offset value: {value}")
+            b = value.to_bytes(2, "little", True)
+            ba[2 * index] = b[0]
+            ba[2 * index + 1] = b[1]
+            # запись начиная с адреса 0x20
+        self.adapter.write_register(self.address, 0x20, ba, 0, "")
+
     def calibrate_offsets(self):
-        """Выполняется калибровка каких-то смещений. Вызывать только в режиме измерений по запросу(!)"""
+        """Выполняется калибровка каких-то смещений. Вызывать только в режиме измерений по запросу(!)
+        Когда напряженность магнитного поля имеет дрейф смещения,
+        значения выходных данных можно компенсировать путем записи в регистры значений смещения."""
         self._control_3(calibrate_offset=True)  # CTRL3.FRC -> 1, CTRL3.OCL -> 1
         while True:
             val = 0x01 & self._read_reg(0x1D)[0]   # read val CTRL3
