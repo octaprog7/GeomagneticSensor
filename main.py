@@ -12,9 +12,9 @@ from sensor_pack.bus_service import I2cAdapter
 
 
 def show_state(sen: hscdtd008a.HSCDTD008A):
-    sen.refresh_state()
-    print(f"active_power_mode: {sensor.active_power_mode}; hi_dynamic_range: {sensor.hi_dynamic_range};")
-    print(f"single_meas_mode: {sensor.single_meas_mode}; periodical_meas_mode: {sensor.periodical_meas_mode};")
+    # sen.refresh_state()
+    print(f"in standby mode: {sensor.in_standby_mode()}; hi_dynamic_range: {sensor.hi_dynamic_range};")
+    print(f"single meas mode: {sensor.is_single_meas_mode()}; continuous meas mod: {sensor.is_continuous_meas_mode()};")
 
 
 if __name__ == '__main__':
@@ -37,7 +37,7 @@ if __name__ == '__main__':
     dly: int = 250
     max_cnt = 30
     sensor = hscdtd008a.HSCDTD008A(adapter)
-    sensor.setup(active_pwr_mode=True)  # включаю датчик. single shot mode (force mode)
+    sensor.start_measure(continuous_mode=False)  # включаю датчик. single shot mode (force mode)
     print(f"Sensor id: {sensor.get_id()}")
     print(f"Offset_drift_values: {sensor.offset_drift_values}")
     print(16 * "_")
@@ -48,7 +48,7 @@ if __name__ == '__main__':
         print("Sensor not pass self test!!! Broken or invalid sensor mode!!!")
         sys.exit(1)
     print("Sensor self test passed!")
-    sensor.start_meas_temp()  # запускаю измерение температуры
+    sensor.enable_temp_meas(True)  # запускаю измерение температуры
     print("Sensor temperature measurement!")
     print(16 * "_")
     show_state(sensor)
@@ -59,7 +59,7 @@ if __name__ == '__main__':
         if status[3]:   # TRDY flag from STAT1 reg
             temp = sensor.get_temperature()
             print(f"Sensor temperature: {temp} ℃")
-            sensor.start_meas_temp()
+            sensor.enable_temp_meas(True)
         else:
             print(f"status: {status}")
         time.sleep_ms(dly)
@@ -70,13 +70,12 @@ if __name__ == '__main__':
     print(16 * "_")
     print("Magnetic field measurement! Force mode!")
     cnt = 0
-    sensor.start_measure()
+    sensor.start_measure(continuous_mode=False)
     while cnt < max_cnt:
         status = sensor.get_status()
         if status[0] or status[1]:  # DRDY or DOR flag from STAT1 reg
-            # field = [sensor.get_axis(i) for i in range(3)]    # три(!) вызова в цикле
             field = sensor.get_axis(-1)		# все за один(!) вызов
-            sensor.start_measure()
+            sensor.start_measure(continuous_mode=False)
             print(f"magnetic field component: X:{field[0]}; Y:{field[1]}; Z:{field[2]}")
         else:
             print(f"status: {status}")
@@ -85,7 +84,7 @@ if __name__ == '__main__':
 
     print("Magnetic field measurement! Periodical mode!")
     sensor.use_offset = True
-    sensor.setup(single_mode=False)     # periodical mode
+    sensor.start_measure(continuous_mode=True)     # periodical mode
     cnt = 0
     while cnt < max_cnt:
         status = sensor.get_status()

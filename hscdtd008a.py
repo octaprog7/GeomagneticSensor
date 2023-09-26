@@ -1,16 +1,15 @@
 # MicroPython
 # mail: goctaprog@gmail.com
 # MIT license
-from sensor_pack import bus_service
-import geosensmod
-from sensor_pack.base_sensor import check_value, Iterator
+from sensor_pack import bus_service, geosensmod
+from sensor_pack.base_sensor import check_value, Iterator, TemperatureSensor
 import array
 import time
 
 
 # little endian byte order
 # Geomagnetic Sensor HSCDTD008A
-class HSCDTD008A(geosensmod.GeoMagneticSensor, Iterator):
+class HSCDTD008A(geosensmod.GeoMagneticSensor, Iterator, TemperatureSensor):
     """Высокочувствительный трех осевой датчик магнитного поля от AlpsAlpine
     A high sensitivity three axis terrestrial magnetic sensor from AlpsAlpine.
     Electronic Compass function."""
@@ -20,30 +19,29 @@ class HSCDTD008A(geosensmod.GeoMagneticSensor, Iterator):
         self._mag_field_comp = array.array("h", [0 for _ in range(3)])
         self._mag_field_offs = array.array("h", [0 for _ in range(3)])
         # Этот датчик имеет режим ожидания и активный режим работы.
-        # # Состояние с низким энергопотреблением. В режиме ожидания есть доступ к регистрам!
-        self._stand_by_pwr_mode = None
-        # # Переход в активное (рабочее) состояние производится изменением содержимого управляющего регистра
-        # # В активном режиме датчик может производить однократное (Force State)
-        # # или периодические (Normal State) измерения с частотой .5, 10, 20, 100 Hz
-        self._active_pwr_mode = None
+        # Состояние с низким энергопотреблением. В режиме ожидания есть доступ к регистрам!
+        # self._stand_by_pwr_mode = None
+        # Переход в активное (рабочее) состояние производится изменением содержимого управляющего регистра
+        # В активном режиме датчик может производить однократное (Force State)
+        # или периодические (Normal State) измерения с частотой .5, 10, 20, 100 Hz
         # режим однократных или периодических измерений (только в Active Power Mode)
-        self._force_state = None
-        self._output_data_rate = None   # 0..3
-        # получаю параметры датчика и устанавливаю значение полей данных класса
-        self.refresh_state()
-        self._DRDY = None   # устанавливается при вызове get_status()
-        self._DOR = None    # устанавливается при вызове get_status()
-        self._FFU = None    # устанавливается при вызове get_status()
-        self._TRDY = None   # устанавливается при вызове get_status()
-        self.get_status()   # устанавливается при вызове get_status()
         # чтение смещений и запись из в _mag_field_offs
         self._read_offset()
         self._use_offset = False
+        # self.enable_temp_meas(True)
+
+    def __del__(self):
+        # go to stand by mode
+        self.start_measure(active_pwr_mode=False)
 
     @staticmethod
     def _copy(destination, source):
         for i, item in enumerate(source):
             destination[i] = item
+
+    def _read_ctrl1(self) -> int:
+        """Чтение регистра управления 1"""
+        return self._read_reg(0x1B)[0]
 
     def _read_field(self, offset: bool = False):
         """Считывает в заранее подготовленные буферы составляющие магнитного поля (при offset=False),
@@ -79,22 +77,19 @@ class HSCDTD008A(geosensmod.GeoMagneticSensor, Iterator):
         bo = self._get_byteorder_as_str()[0]
         self.adapter.write_register(self.address, reg_addr, value, bytes_count, bo)
 
-    def get_axis(self, axis: int) -> [int, tuple]:
-        if axis >= 0:
-            check_value(axis, range(3), f"Invalid axis value: {axis}")
-            b_val = self._read_reg(0x10 + 2 * axis, 2)
-            ret_val = self.unpack(fmt_char="h", source=b_val)[0]  # read as signed short
-            if self.use_offset:
-                ret_val += self.offset_drift_values[axis]
-            return ret_val
-        if -1 == axis:
-            # mag_field_comp = array.array("h")  # signed short elements
-            # b_val = self._read_reg(0x10, 6)
-            self._read_field(offset=False)
-            if self.use_offset:
-                return tuple([self._mag_field_comp[i] + self.offset_drift_values[i] for i in range(3)])
-            return tuple(self._mag_field_comp)
-        return None
+    def read_raw(self, axis: int) -> int:
+        check_value(axis, range(3), f"Invalid axis value: {axis}")
+        b_val = self._read_reg(0x10 + 2 * axis, 2)
+        ret_val = self.unpack(fmt_char="h", source=b_val)[0]  # read as signed short
+        if self.use_offset:
+            ret_val += self.offset_drift_values[axis]
+        return ret_val
+
+    def _get_all_meas_result(self) -> tuple:
+        """Для наибыстрейшего считывания за один вызов всех результатов измерений из датчика по
+        относительно медленной шине! Для переопределения программистом!!!"""
+        b_val = self._read_reg(0x10, 6)     # x, y, z. 6 bytes
+        return self.unpack(fmt_char='hhh', source=b_val)
 
     def get_temperature(self) -> int:
         """Возвращает температуру корпуса датчика"""
@@ -108,12 +103,12 @@ class HSCDTD008A(geosensmod.GeoMagneticSensor, Iterator):
     def get_status(self) -> tuple:
         """Возвращает кортеж битов(номер бита): DRDY(6), DOR(5), FFU(2), TRDY(1)"""
         stat = self._read_reg(0x18)[0]
-        self._DRDY = bool(stat & 0b0100_0000)
-        self._DOR = bool(stat & 0b0010_0000)
-        self._FFU = bool(stat & 0b0000_0100)
-        self._TRDY = bool(stat & 0b0000_0010)
+        drdy = bool(stat & 0b0100_0000)
+        dor = bool(stat & 0b0010_0000)
+        ffu = bool(stat & 0b0000_0100)
+        trdy = bool(stat & 0b0000_0010)
         #      Data Ready Detection, Data Overrun Detection, FIFO full alarm,     Temperature ready
-        return self._DRDY, self._DOR, self._FFU, self._TRDY
+        return drdy, dor, ffu, trdy
 
     def _control_1(
             self,
@@ -122,7 +117,7 @@ class HSCDTD008A(geosensmod.GeoMagneticSensor, Iterator):
             force_state: [bool, None] = True,  # bit 1
     ):
         """Control 1 Register (CTRL1)."""
-        val = self._read_reg(0x1B)[0]
+        val = self._read_ctrl1()
         if active_power_mode is not None:
             val &= ~(1 << 7)  # mask
             val |= active_power_mode << 7
@@ -214,7 +209,7 @@ class HSCDTD008A(geosensmod.GeoMagneticSensor, Iterator):
 
     def perform_self_test(self) -> bool:
         """Возвращает истина, если самопроверка пройдена!
-        Не выполняйте проверку в режиме stand by! Только в режиме active_power_mode!!!"""
+        Не выполняйте проверку в режиме stand by!!! Только в режиме active_power_mode!!!"""
         val = self._read_reg(0x0C)[0]   # read STB reg
         if 0x55 != val:
             return False
@@ -228,28 +223,17 @@ class HSCDTD008A(geosensmod.GeoMagneticSensor, Iterator):
         """Выполняет програмный сброс датчика"""
         self._control_3(soft_reset=True)  # CTRL3.SRST -> 1
 
-    def refresh_state(self):
-        """Возвращает текущий режим работы датчика"""
-        ctrl1 = self._read_reg(0x1B)[0]     # read CTRL1 reg
-        self._active_pwr_mode = (0 != ctrl1 & 0x80)     # Power Mode
-        self._output_data_rate = (ctrl1 & 0b0001_1000) >> 3
-        self._force_state = 0 != (ctrl1 & 0x02)  # State Control in Active Mode
+    def is_continuous_meas_mode(self) -> bool:
+        return not self.is_single_meas_mode()
 
-    @property
-    def active_power_mode(self) -> bool:
-        """Возвращает Истина, когда датчик включен и Ложь, когда датчик находится в состоянии stand by"""
-        return self._active_pwr_mode
+    def is_single_meas_mode(self) -> bool:
+        tmp = 0x02 & self._read_ctrl1()  # FS bit. Force State
+        return 0 != tmp
 
-    @property
-    def single_meas_mode(self) -> bool:
-        """возвращает Истина, когда датчик находится в режиме измерений по запросу (однократное(!) измерение)"""
-        # self.refresh_state()
-        return self._force_state
-
-    @property
-    def periodical_meas_mode(self) -> bool:
-        """возвращает Истина, когда датчик находится в режиме периодических измерений"""
-        return not self.single_meas_mode
+    def in_standby_mode(self) -> bool:
+        """Возвращает Истина, когда датчик находится в состоянии stand by и Ложь, когда датчик включен!"""
+        tmp = 0x80 & self._read_ctrl1()     # PC bit
+        return 0 == tmp
 
     def set_dynamic_range(self, hi: bool):
         """устанавливает динамический диапазон данных датчика. Если hi Истина, то 15 bit, иначе 14 бит"""
@@ -268,24 +252,31 @@ class HSCDTD008A(geosensmod.GeoMagneticSensor, Iterator):
     def hi_dynamic_range(self, value: bool):
         self.set_dynamic_range(value)
 
-    def start_measure(self):
-        """Запускает однократное(!) измерение. Вызывается в режиме измерений по запросу(!),
-        смотри single_meas_mode, setup"""
-        self._control_3(force_state=True)  # CTRL3.FRC -> 1
+    # def start_measure(self, continuous_mode: bool = True, update_rate: int = 0,
+    #                   full_scale: bool = False, over_sample_ratio: int = 3):
+    # def start_measure(self):
+    #    """Запускает однократное(!) измерение. Вызывается в режиме измерений по запросу(!),
+    #    смотри single_meas_mode"""
+    #    self._control_3(force_state=True)  # CTRL3.FRC -> 1
 
-    def setup(self, active_pwr_mode: bool = True, data_rate: int = 1, single_mode: bool = True):
-        """Настройка режима работы датчика.
+    def start_measure(self, continuous_mode: bool = True, update_rate: int = 1, active_pwr_mode: bool = True):
+        """Запускает однократное или периодические измерение(я).
             active_pwr_mode - если Истина, то датчик включен, иначе в состоянии stand by.
-            data_rate - частота измерений (0..3) при периодических(!) измерениях.
-            single_mode - если Истина, то каждое измерение нужно запускать вызовом start_measure,
+            update_rate - частота измерений (0..3) при периодических(!) измерениях.
+            continuous_mode - если False, то каждое измерение нужно запускать вызовом start_measure,
                             иначе измерения запускаются автоматически с частотой data_rate
         """
-        check_value(data_rate, range(4), f"Invalid data_rate value: {data_rate}")
-        self._control_1(active_pwr_mode, data_rate, single_mode)
+        check_value(update_rate, range(4), f"Invalid update rate value: {update_rate}")
+        self._control_1(active_pwr_mode, update_rate, not continuous_mode)
+        if not continuous_mode:
+            # Запускает однократное(!) измерение. Вызывается в режиме измерений по запросу(!)
+            # Частота запросов, зависит от частоты вызова метода и пропускной способности шины! :-)
+            # single meas mode
+            self._control_3(force_state=True)  # CTRL3.FRC -> 1
 
-    def start_meas_temp(self, value: bool = True):
+    def enable_temp_meas(self, enable: bool = True):
         """управляет измерением температуры в активном режиме датчика"""
-        self._control_3(temp_measure=value)
+        self._control_3(temp_measure=enable)
 
     @property
     def offset_drift_values(self) -> tuple[int, int, int]:
@@ -323,5 +314,5 @@ class HSCDTD008A(geosensmod.GeoMagneticSensor, Iterator):
 
     def __next__(self):
         """возвращает результат только в периодическом режиме измерений!"""
-        if self.periodical_meas_mode:
+        if self.is_continuous_meas_mode():
             return self.get_axis(-1)
