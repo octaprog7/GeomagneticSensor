@@ -252,13 +252,6 @@ class HSCDTD008A(geosensmod.GeoMagneticSensor, Iterator, TemperatureSensor):
     def hi_dynamic_range(self, value: bool):
         self.set_dynamic_range(value)
 
-    # def start_measure(self, continuous_mode: bool = True, update_rate: int = 0,
-    #                   full_scale: bool = False, over_sample_ratio: int = 3):
-    # def start_measure(self):
-    #    """Запускает однократное(!) измерение. Вызывается в режиме измерений по запросу(!),
-    #    смотри single_meas_mode"""
-    #    self._control_3(force_state=True)  # CTRL3.FRC -> 1
-
     def start_measure(self, continuous_mode: bool = True, update_rate: int = 1, active_pwr_mode: bool = True):
         """Запускает однократное или периодические измерение(я).
             active_pwr_mode - если Истина, то датчик включен, иначе в состоянии stand by.
