@@ -1,6 +1,8 @@
 # micropython
 # MIT license
 # Copyright (c) 2022 Roman Shevchik   goctaprog@gmail.com
+import struct
+
 import micropython
 import ustruct
 from sensor_pack import bus_service
@@ -73,4 +75,17 @@ class Iterator:
         return self
 
     def __next__(self):
+        raise NotImplementedError
+
+
+class TemperatureSensor:
+    """Вспомогательный или основной датчик температуры"""
+    def enable_temp_meas(self, enable: bool = True):
+        """Включает измерение температуры при enable в Истина
+        Для переопределения программистом!!!"""
+        raise NotImplementedError
+
+    def get_temperature(self) -> [int, float]:
+        """Возвращает температуру корпуса датчика в градусах Цельсия!
+        Для переопределения программистом!!!"""
         raise NotImplementedError
