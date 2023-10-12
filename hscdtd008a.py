@@ -18,6 +18,8 @@ class HSCDTD008A(geosensmod.GeoMagneticSensor, Iterator, TemperatureSensor):
         super().__init__(adapter=adapter, address=0x0C, big_byte_order=False)  # адрес фиксирован!
         self._mag_field_comp = array.array("h", [0 for _ in range(3)])
         self._mag_field_offs = array.array("h", [0 for _ in range(3)])
+        self._buf_2 = bytearray((0 for _ in range(2)))  # для хранения
+        self._buf_6 = bytearray((0 for _ in range(6)))  # для хранения
         # Этот датчик имеет режим ожидания и активный режим работы.
         # Состояние с низким энергопотреблением. В режиме ожидания есть доступ к регистрам!
         # self._stand_by_pwr_mode = None
@@ -29,6 +31,11 @@ class HSCDTD008A(geosensmod.GeoMagneticSensor, Iterator, TemperatureSensor):
         self._read_offset()
         self._use_offset = False
         # self.enable_temp_meas(True)
+
+    def read_buf_from_mem(self, mem_addr: int, buf: bytearray):
+        """Читает из устройства с адресом address в буфер buf, начиная с адреса в устройстве mem_addr.
+        Количество считываемых байт определяется длинной буфера buf."""
+        return self.adapter.read_buf_from_mem(self.address, mem_addr, buf)  # 16 bit value (int16)
 
     def __del__(self):
         # go to stand by mode
@@ -51,7 +58,8 @@ class HSCDTD008A(geosensmod.GeoMagneticSensor, Iterator, TemperatureSensor):
         if offset:  # read offset X, offset Y, offset Z
             source_addr = 0x20
             destination = self._mag_field_offs
-        b_val = self._read_reg(reg_addr=source_addr, bytes_count=6)
+        b_val = self._buf_6
+        self.read_buf_from_mem(source_addr, b_val)
         self._copy(destination, self.unpack(fmt_char="hhh", source=b_val))
 
     def _read_offset(self):
@@ -79,7 +87,8 @@ class HSCDTD008A(geosensmod.GeoMagneticSensor, Iterator, TemperatureSensor):
 
     def read_raw(self, axis: int) -> int:
         check_value(axis, range(3), f"Invalid axis value: {axis}")
-        b_val = self._read_reg(0x10 + 2 * axis, 2)
+        b_val = self._buf_2
+        self.read_buf_from_mem(0x10 + 2 * axis, b_val)
         ret_val = self.unpack(fmt_char="h", source=b_val)[0]  # read as signed short
         if self.use_offset:
             ret_val += self.offset_drift_values[axis]
@@ -88,7 +97,8 @@ class HSCDTD008A(geosensmod.GeoMagneticSensor, Iterator, TemperatureSensor):
     def _get_all_meas_result(self) -> tuple:
         """Для наибыстрейшего считывания за один вызов всех результатов измерений из датчика по
         относительно медленной шине! Для переопределения программистом!!!"""
-        b_val = self._read_reg(0x10, 6)     # x, y, z. 6 bytes
+        b_val = self._buf_6
+        self.read_buf_from_mem(0x10, b_val)     # x, y, z. 6 bytes
         return self.unpack(fmt_char='hhh', source=b_val)
 
     def get_temperature(self) -> int:

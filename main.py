@@ -2,7 +2,7 @@
 # mail: goctaprog@gmail.com
 # MIT license
 import time
-
+import math
 import sys
 # Пожалуйста, прочитайте документацию на HSCDTD008A!
 # Please read the HSCDTD008A documentation!
@@ -90,6 +90,8 @@ if __name__ == '__main__':
         status = sensor.get_status()
         if status[0]:  # DRDY or DOR flag from STAT1 reg    # or status[1]
             field = sensor.get_axis(-1)  # все за один(!) вызов
-            print(f"magnetic field component: X:{field[0]}; Y:{field[1]}; Z:{field[2]}")
+            # напряженность магнитного поля в условных ед.
+            mag_field_strength = math.sqrt(sum(map(lambda val: val ** 2, field)))
+            print(f"magnetic field component: X:{field[0]}; Y:{field[1]}; Z:{field[2]}; {mag_field_strength}")
         time.sleep_ms(dly)
         # cnt += 1
