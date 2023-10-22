@@ -85,6 +85,12 @@ class HSCDTD008A(geosensmod.GeoMagneticSensor, Iterator, TemperatureSensor):
         bo = self._get_byteorder_as_str()[0]
         self.adapter.write_register(self.address, reg_addr, value, bytes_count, bo)
 
+    def get_conversion_cycle_time(self) -> int:
+        """Возвращает время преобразования сигнала измеряемой величины в значение,
+        готовое к считыванию. В миллисекундах.
+        Просьба не путать с update_rate!"""
+        return 5    # 5 ms!
+
     def read_raw(self, axis: int) -> int:
         check_value(axis, range(3), f"Invalid axis value: {axis}")
         b_val = self._buf_2
@@ -265,9 +271,11 @@ class HSCDTD008A(geosensmod.GeoMagneticSensor, Iterator, TemperatureSensor):
     def start_measure(self, continuous_mode: bool = True, update_rate: int = 1, active_pwr_mode: bool = True):
         """Запускает однократное или периодические измерение(я).
             active_pwr_mode - если Истина, то датчик включен, иначе в состоянии stand by.
-            update_rate - частота измерений (0..3) при периодических(!) измерениях.
+            update_rate - частота измерений (0..3) при периодических(!) измерениях. 0 - 0.5 Hz; 1 - 10 Hz;
+                                                                                    2 - 20 Hz; 3 - 100 Hz
             continuous_mode - если False, то каждое измерение нужно запускать вызовом start_measure,
                             иначе измерения запускаются автоматически с частотой data_rate
+            update_rate - это не время преобразования(5 мс), а частота(Гц) обновления данных датчиком!
         """
         check_value(update_rate, range(4), f"Invalid update rate value: {update_rate}")
         self._control_1(active_pwr_mode, update_rate, not continuous_mode)
